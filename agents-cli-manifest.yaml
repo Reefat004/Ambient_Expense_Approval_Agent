@@ -1,0 +1,15 @@
+name: "my-agent"
+acli_version: "0.4.0"
+agent_directory: "expense_agent"
+region: "us-east1"
+base_template: "adk"
+generated_at: "2026-06-18T15:49:00.158828+00:00"
+language: "python"
+create_params:
+  deployment_target: "agent_runtime"
+  session_type: "none"
+  cicd_runner: "skip"
+  include_data_ingestion: false
+  
+  datastore: "none"
+  agent_guidance_filename: "GEMINI.md"
