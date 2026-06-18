@@ -40,13 +40,14 @@ async def test_agent_stream_query(agent_app: AgentEngineApp) -> None:
     """
     # Create message and events for the async_stream_query
     import json
+
     payload = {
         "data": {
             "amount": 45.0,
             "submitter": "alice@example.com",
             "category": "meals",
             "description": "Lunch with client",
-            "date": "2026-06-18"
+            "date": "2026-06-18",
         }
     }
     message = json.dumps(payload)

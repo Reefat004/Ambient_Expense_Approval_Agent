@@ -38,7 +38,6 @@ from pydantic import BaseModel, Field
 
 from .config import config
 
-
 # ---------------------------------------------------------------------------
 # Pydantic schemas for structured data flow
 # ---------------------------------------------------------------------------
@@ -70,8 +69,10 @@ def parse_expense_email(node_input: str) -> Event:
     except json.JSONDecodeError:
         err_msg = f"Invalid JSON: {node_input[:200]}"
         return Event(
-            content=types.Content(role="model", parts=[types.Part.from_text(text=err_msg)]),
-            output={"error": err_msg}
+            content=types.Content(
+                role="model", parts=[types.Part.from_text(text=err_msg)]
+            ),
+            output={"error": err_msg},
         )
 
     data = event.get("data", {})
@@ -84,8 +85,10 @@ def parse_expense_email(node_input: str) -> Event:
         except Exception:
             err_msg = f"Failed to decode base64 data: {data[:200]}"
             return Event(
-                content=types.Content(role="model", parts=[types.Part.from_text(text=err_msg)]),
-                output={"error": err_msg}
+                content=types.Content(
+                    role="model", parts=[types.Part.from_text(text=err_msg)]
+                ),
+                output={"error": err_msg},
             )
 
     return Event(
@@ -108,8 +111,10 @@ def route_by_amount(node_input: dict, ctx: Context) -> Event:
     ctx.state["expense_data"] = node_input
     amount = node_input.get("amount", 0.0)
     if amount >= config.review_threshold:
-        return Event(route="NEEDS_REVIEW", output=node_input)
-    return Event(route="AUTO_APPROVE", output=node_input)
+        ctx.route = "NEEDS_REVIEW"
+    else:
+        ctx.route = "AUTO_APPROVE"
+    return Event(output=node_input)
 
 
 def security_checkpoint(node_input: dict, ctx: Context) -> Event:
@@ -119,16 +124,16 @@ def security_checkpoint(node_input: dict, ctx: Context) -> Event:
     by routing directly to human approval ('SUSPICIOUS').
     """
     description = node_input.get("description", "")
-    
+
     # 1. Scrub SSNs & Credit Cards
     redacted_categories = []
-    if re.search(r'\b\d{3}-\d{2}-\d{4}\b', description):
-        description = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', "[REDACTED_SSN]", description)
+    if re.search(r"\b\d{3}-\d{2}-\d{4}\b", description):
+        description = re.sub(r"\b\d{3}-\d{2}-\d{4}\b", "[REDACTED_SSN]", description)
         redacted_categories.append("SSN")
-    if re.search(r'\b(?:\d[ -]*?){13,19}\b', description):
-        description = re.sub(r'\b(?:\d[ -]*?){13,19}\b', "[REDACTED_CC]", description)
+    if re.search(r"\b(?:\d[ -]*?){13,19}\b", description):
+        description = re.sub(r"\b(?:\d[ -]*?){13,19}\b", "[REDACTED_CC]", description)
         redacted_categories.append("Credit Card")
-        
+
     node_input["description"] = description
     ctx.state["expense_data"] = node_input
     ctx.state["redacted_categories"] = redacted_categories
@@ -146,8 +151,10 @@ def security_checkpoint(node_input: dict, ctx: Context) -> Event:
         "you are now",
     ]
     description_lower = description.lower()
-    has_injection = any(trigger in description_lower for trigger in prompt_injection_triggers)
-    
+    has_injection = any(
+        trigger in description_lower for trigger in prompt_injection_triggers
+    )
+
     if has_injection:
         log_entry = {
             "severity": "WARNING",
@@ -158,9 +165,11 @@ def security_checkpoint(node_input: dict, ctx: Context) -> Event:
         }
         print(json.dumps(log_entry), flush=True)
         ctx.state["security_flag"] = True
-        return Event(route="SUSPICIOUS", output=node_input)
+        ctx.route = "SUSPICIOUS"
+        return Event(output=node_input)
 
-    return Event(route="CLEAN", output=node_input)
+    ctx.route = "CLEAN"
+    return Event(output=node_input)
 
 
 def auto_approve(node_input: dict) -> Event:
@@ -180,7 +189,7 @@ def auto_approve(node_input: dict) -> Event:
     msg = f"Expense auto-approved: ${node_input['amount']:.2f} from {node_input['submitter']}."
     return Event(
         content=types.Content(role="model", parts=[types.Part.from_text(text=msg)]),
-        output={"status": "approved", **node_input}
+        output={"status": "approved", **node_input},
     )
 
 
@@ -305,7 +314,7 @@ def process_decision(node_input: Any, ctx: Context) -> Event:
     msg = " ".join(parts)
     return Event(
         content=types.Content(role="model", parts=[types.Part.from_text(text=msg)]),
-        output={"status": status, "message": msg}
+        output={"status": status, "message": msg},
     )
 
 
