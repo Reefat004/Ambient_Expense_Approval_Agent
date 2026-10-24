@@ -13,18 +13,35 @@
 # limitations under the License.
 
 import logging
+from typing import TYPE_CHECKING
 
 import pytest
 from google.adk.events.event import Event
 
-from expense_agent.agent_runtime_app import AgentEngineApp
+if TYPE_CHECKING:
+    pass
 
 
 @pytest.fixture
-def agent_app(monkeypatch: pytest.MonkeyPatch) -> AgentEngineApp:
+def agent_app(monkeypatch: pytest.MonkeyPatch):
     """Fixture to create and set up AgentEngineApp instance"""
     # Set integration test flag to mock external services
     monkeypatch.setenv("INTEGRATION_TEST", "TRUE")
+    monkeypatch.setenv("GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY", "false")
+    from google.auth.credentials import AnonymousCredentials
+    from google.cloud.aiplatform import initializer
+    from google.cloud.aiplatform.utils import resource_manager_utils
+
+    monkeypatch.setattr(initializer.global_config, "_project", "dummy-project")
+    monkeypatch.setattr(
+        initializer.global_config, "_credentials", AnonymousCredentials()
+    )
+    monkeypatch.setattr(
+        resource_manager_utils,
+        "get_project_id",
+        lambda *args, **kwargs: "dummy-project",
+    )
+    monkeypatch.delenv("LOGS_BUCKET_NAME", raising=False)
 
     from expense_agent.agent_runtime_app import agent_runtime
 
@@ -33,7 +50,7 @@ def agent_app(monkeypatch: pytest.MonkeyPatch) -> AgentEngineApp:
 
 
 @pytest.mark.asyncio
-async def test_agent_stream_query(agent_app: AgentEngineApp) -> None:
+async def test_agent_stream_query(agent_app) -> None:
     """
     Integration test for the agent stream query functionality.
     Tests that the agent returns valid streaming responses.
@@ -72,7 +89,7 @@ async def test_agent_stream_query(agent_app: AgentEngineApp) -> None:
     assert has_text_content, "Expected at least one event with text content"
 
 
-def test_agent_feedback(agent_app: AgentEngineApp) -> None:
+def test_agent_feedback(agent_app) -> None:
     """
     Integration test for the agent feedback functionality.
     Tests that feedback can be registered successfully.

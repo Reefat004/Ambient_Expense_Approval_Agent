@@ -1,0 +1,7 @@
+{
+  "message": {
+    "messageId": "demo-small-001",
+    "data": "eyJhbW91bnQiOiA0NS4wLCAic3VibWl0dGVyIjogImFsaWNlQGV4YW1wbGUuY29tIiwgImNhdGVnb3J5IjogIm1lYWxzIiwgImRlc2NyaXB0aW9uIjogIkx1bmNoIHdpdGggYSBjbGllbnQiLCAiZGF0ZSI6ICIyMDI2LTEwLTI0In0="
+  },
+  "subscription": "projects/demo/subscriptions/expenses"
+}

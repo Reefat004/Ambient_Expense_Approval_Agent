@@ -24,6 +24,8 @@ def setup_telemetry() -> str | None:
     capture_content = os.environ.get(
         "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "false"
     )
+    # Enforce metadata-only capture even when no upload bucket is configured.
+    os.environ["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "NO_CONTENT"
     if bucket and capture_content != "false":
         logging.info(
             "Prompt-response logging enabled - mode: NO_CONTENT (metadata only, no prompts/responses)"

@@ -24,9 +24,8 @@ session_service = InMemorySessionService()
 
 # Instantiate the Runner
 runner = Runner(
-    agent=adk_app.root_agent,
+    app=adk_app,
     session_service=session_service,
-    app_name=adk_app.name,
 )
 
 app = FastAPI(
@@ -38,18 +37,23 @@ app = FastAPI(
 @app.post("/pubsub")
 async def pubsub_webhook(request: Request):
     """Webhook endpoint for Pub/Sub push subscriptions."""
-    envelope = await request.json()
+    try:
+        envelope = await request.json()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Bad Request: Invalid JSON") from e
 
-    if not envelope:
+    if not isinstance(envelope, dict) or not envelope:
         raise HTTPException(status_code=400, detail="Bad Request: Empty body")
 
     message = envelope.get("message")
-    if not message:
+    if not isinstance(message, dict) or not message:
         raise HTTPException(
             status_code=400, detail="Bad Request: Missing 'message' in envelope"
         )
 
     subscription = envelope.get("subscription", "unknown-subscription")
+    if not isinstance(subscription, str):
+        raise HTTPException(status_code=400, detail="Bad Request: Invalid subscription")
 
     # Normalize subscription path to keep session ID readable
     # e.g., projects/my-project/subscriptions/expense-sub -> expense-sub
@@ -64,15 +68,18 @@ async def pubsub_webhook(request: Request):
         )
 
     try:
-        data_json_str = base64.b64decode(data_b64).decode("utf-8")
+        data_json_str = base64.b64decode(data_b64, validate=True).decode("utf-8")
         data_json = json.loads(data_json_str)
-    except Exception as e:
-        logger.error(f"Failed to decode message data: {e}")
+        from expense_agent.security import decode_expense
+
+        decode_expense(json.dumps({"data": data_json}))
+    except (ValueError, TypeError) as e:
+        logger.warning("Invalid expense payload")
         raise HTTPException(
             status_code=400, detail="Bad Request: Invalid base64 or JSON data"
         ) from e
 
-    logger.info(f"Received expense event from {normalized_sub} (msg_id={message_id})")
+    logger.info("Received expense event")
 
     # Construct an input message for the ADK workflow
     payload_str = json.dumps({"data": data_json})
@@ -87,26 +94,21 @@ async def pubsub_webhook(request: Request):
 
     # Ensure session exists
     try:
-        session_service.create_session_sync(
+        await session_service.create_session(
             user_id=user_id, app_name=adk_app.name, session_id=session_id
         )
     except AlreadyExistsError:
-        logger.info(
-            f"Session {session_id} already exists. Skipping duplicate execution."
-        )
+        logger.info("Session already exists. Skipping duplicate execution.")
         return {"status": "already_processed", "message_id": message_id}
 
     # Run the workflow
     logger.info("Executing workflow...")
-    for event in runner.run(
+    async for _event in runner.run_async(
         new_message=start_message,
         user_id=user_id,
         session_id=session_id,
     ):
-        if event.output:
-            logger.info(f"Workflow Event Output: {event.output}")
-        if event.content and event.content.parts:
-            logger.info(f"Workflow Event Content: {event.content.parts[0].text}")
+        pass
 
     logger.info("Workflow execution finished.")
 

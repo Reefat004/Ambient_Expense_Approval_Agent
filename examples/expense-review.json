@@ -1,0 +1,9 @@
+{
+  "data": {
+    "amount": 150.0,
+    "submitter": "alice@example.com",
+    "category": "software",
+    "description": "Annual IDE license for client development",
+    "date": "2026-10-24"
+  }
+}

@@ -202,3 +202,7 @@ my_env.tfvars
 
 # A2A Inspector
 tools/a2a-inspector/
+
+# Local per-run evaluation archives; curated latest and historical evidence is tracked.
+artifacts/traces/*_20*.json
+artifacts/grade_results/*_20*.json

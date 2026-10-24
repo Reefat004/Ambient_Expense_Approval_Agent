@@ -1,72 +1,51 @@
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""Network-free fixtures; model behavior belongs in the live evaluation suite."""
 
-import os
-from unittest.mock import MagicMock
-
-import google.auth
-import google.cloud.logging
-import google.genai
+import pytest
+from google.adk.models.base_llm import BaseLlm
+from google.adk.models.llm_response import LlmResponse
 from google.genai import types
+from pydantic import Field
 
-# Pre-set dummy GCP environment variables for tests
-os.environ["GOOGLE_CLOUD_PROJECT"] = "dummy-project"
-os.environ["GOOGLE_CLOUD_LOCATION"] = "us-central1"
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
 
-# Mock google.auth.default
-mock_credentials = MagicMock()
-google.auth.default = lambda *args, **kwargs: (mock_credentials, "dummy-project")
+class RecordingModel(BaseLlm):
+    model: str = "offline-test-model"
+    requests: list = Field(default_factory=list)
 
-# Mock google.cloud.logging.Client to avoid 403 API errors during tests
-google.cloud.logging.Client = MagicMock
+    async def generate_content_async(self, llm_request, stream=False):
+        self.requests.append(llm_request.model_dump(mode="json", exclude_none=True))
+        yield LlmResponse(
+            content=types.Content(
+                role="model",
+                parts=[
+                    types.Part.from_text(
+                        text="Recommendation: approve. Human decision required."
+                    )
+                ],
+            )
+        )
 
-# Mock google.genai.Client to prevent live LLM API calls during tests
-# Define mock response
-mock_candidate = types.Candidate(
-    content=types.Content(
-        role="model",
-        parts=[types.Part.from_text(text="Mocked LLM risk review: Low risk.")],
+
+@pytest.fixture(autouse=True)
+def offline_services(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import google.auth
+    import google.cloud.logging
+
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "dummy-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "True")
+    monkeypatch.setattr(
+        google.auth, "default", lambda *a, **k: (MagicMock(), "dummy-project")
     )
-)
-mock_response = types.GenerateContentResponse(
-    candidates=[mock_candidate],
-)
+    monkeypatch.setattr(google.cloud.logging, "Client", MagicMock)
+    from google.adk.models.google_llm import Gemini
 
-# Original Client.__init__
-original_client_init = google.genai.Client.__init__
+    model = RecordingModel()
 
+    async def generate(self, llm_request, stream=False):
+        async for response in model.generate_content_async(llm_request, stream):
+            yield response
 
-def mocked_client_init(self, *args, **kwargs):
-    original_client_init(self, *args, **kwargs)
-
-    # Mock synchronous generation method
-    self.models.generate_content = MagicMock(return_value=mock_response)
-
-    # Mock asynchronous generation methods
-    async def dummy_generate(*args, **kwargs):
-        return mock_response
-
-    async def dummy_stream(*args, **kwargs):
-        async def inner_stream():
-            yield mock_response
-
-        return inner_stream()
-
-    self.aio.models.generate_content = dummy_generate
-    self.aio.models.generate_content_stream = dummy_stream
-
-
-# Apply the patch
-google.genai.Client.__init__ = mocked_client_init
+    monkeypatch.setattr(Gemini, "generate_content_async", generate)
+    return model

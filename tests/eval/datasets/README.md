@@ -1,102 +1,26 @@
-# Evaluation Datasets
+# Synthetic regression scenarios
 
-This directory contains evaluation datasets for testing agent behavior.
+`basic-dataset.json` contains 20 synthetic cases and expected deterministic
+business outcomes. SSNs/cards in this source fixture are deliberately fake test
+inputs. Do not replace them with employee data.
 
-## Running Evaluations
+Run `make eval` for fresh live Gemini inference and deterministic grading, or
+`make eval-offline` for the explicitly labeled model-stub run. Cases cover clean
+routing, exact threshold boundaries, manual rejection, ambiguous decisions,
+supported PII across fields and base64 input, low-value injections, Unicode
+obfuscation, invalid amounts/shapes, and flat JSON.
 
-### Default Dataset
-```bash
-# Generate traces using the default dataset
-agents-cli eval generate
-agents-cli eval grade
-```
+Each case has a JSON-text `prompt`, an `expected` object with `model_called`,
+`review_required`, and `status`, and optionally `decision`/`security_alert`.
+The project harness supplies synthetic human decisions by matching the
+`adk_request_input` call ID; it does not send a decision as a new expense.
 
-### Custom Dataset
-```bash
-# Generate traces for a custom dataset
-agents-cli eval generate --dataset tests/eval/datasets/custom-dataset.json --output custom_traces/
-agents-cli eval grade --metrics general_quality --traces custom_traces/
-```
+Generated traces include sanitized sessions and assembled model requests. They
+do not copy the raw source prompt into a top-level artifact field. The grader
+checks outcomes and privacy evidence and fails with a nonzero exit code.
+Model-stub inference, live inference, and historical model-judge grades are
+labeled separately. No artifact is an independent security audit.
 
-## Dataset Format
-
-Each dataset file follows the Gemini Enterprise Agent Platform Evaluation
-dataset format. An eval case may use **either** of two shapes — both are
-valid input to `agents-cli eval generate`:
-
-**Shape A — single-prompt case:**
-
-```json
-{
-  "eval_cases": [
-    {
-      "eval_case_id": "unique_case_id",
-      "prompt": {
-        "role": "user",
-        "parts": [{"text": "User message"}]
-      }
-    }
-  ]
-}
-```
-
-**Shape B — continued-conversation case (the "N+1" pattern):**
-The case carries prior turns in `agent_data` and the last turn ends with a
-user message; `eval generate` appends the next agent response.
-
-```json
-{
-  "eval_cases": [
-    {
-      "eval_case_id": "unique_case_id",
-      "agent_data": {
-        "turns": [
-          {
-            "turn_index": 0,
-            "events": [
-              {"author": "user",  "content": {"role": "user",  "parts": [{"text": "First user message"}]}},
-              {"author": "agent", "content": {"role": "model", "parts": [{"text": "First agent reply"}]}},
-              {"author": "user",  "content": {"role": "user",  "parts": [{"text": "Follow-up user message"}]}}
-            ]
-          }
-        ]
-      }
-    }
-  ]
-}
-```
-
-## Key Fields
-
-- `eval_cases`: Array of evaluation cases.
-- `eval_case_id`: Unique identifier for the evaluation case (optional).
-- `prompt`: A single user message — Shape A.
-- `agent_data.turns`: Prior conversation turns ending with a user message — Shape B.
-
-## Creating Custom Datasets
-
-You can create custom datasets in two ways:
-
-1. **By Hand**: Copy `basic-dataset.json` as a template and manually add evaluation cases.
-2. **Synthesize**: Use the synthetic dataset generation command to generate conversation scenarios:
-   ```bash
-   agents-cli eval dataset synthesize --count 10
-   ```
-
-## Discovering Metrics
-
-You can discover available out-of-the-box evaluation metrics by running:
-
-```bash
-agents-cli eval metric list
-```
-
-## Beyond Generate and Grade
-
-Once you have a baseline, the eval surface has a few more commands worth knowing about:
-
-- `agents-cli eval compare BASE CAND` — diff two grade-results files (regression check).
-- `agents-cli eval analyze RESULTS` — cluster failure modes from a grade-results file.
-- `agents-cli eval optimize` — auto-tune your agent's prompts using eval data.
-
-See the [Evaluation Guide](https://google.github.io/agents-cli/guide/evaluation/) for the full surface and metric reference.
+`eval_config.yaml` is only for the separate optional agents-cli built-in safety
+metric. The project deterministic trace format is consumed by `grade_traces.py`,
+not by `agents-cli eval compare` or `agents-cli eval grade`.
