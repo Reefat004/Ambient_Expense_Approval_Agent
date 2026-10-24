@@ -1,0 +1,9 @@
+{
+  "data": {
+    "amount": 45.0,
+    "submitter": "alice@example.com",
+    "category": "meals",
+    "description": "Lunch with a client",
+    "date": "2026-10-24"
+  }
+}

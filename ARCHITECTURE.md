@@ -1,71 +1,36 @@
-# System Architecture
+# System architecture
 
-The Ambient Expense Approval Agent is built on the **Google Agent Development Kit (ADK) 2.0**. It utilizes the new **Graph Workflow API** to process, route, and evaluate expense reports in a deterministic, state-driven manner.
-
-## Core Concepts
-
-The system models the expense approval process as a directed graph where:
-- **Nodes** represent discrete operations or checkpoints (e.g., security scrubbing, LLM review).
-- **Edges** represent the routing logic based on the outcome of a node.
-- **State** is a shared data structure (`ExpenseState`) passed along the nodes containing the expense data and evaluation context.
-
-## State Management
-
-The shared state passed through the graph is defined by the `ExpenseState` object:
-- `expense`: The core data model (`amount`, `submitter`, `category`, `description`, `date`).
-- `security_flag`: A boolean indicating if the input triggered a security warning.
-- `llm_decision`: The outcome of the LLM review (`APPROVED` or `FLAGGED`).
-- `human_decision`: The final decision from the human-in-the-loop (if required).
-- `final_status`: The ultimate outcome of the workflow (`APPROVED`, `REJECTED`, or `FLAGGED`).
-
-## Graph Nodes & Workflow
-
-1. **`__start__`**  
-   The entry point. Receives the JSON payload, instantiates the `ExpenseState`, and routes to the `security_checkpoint`.
-
-2. **`security_checkpoint` (Node)**  
-   Acts as a gateway to protect downstream nodes.
-   - **Action:** Scrubs the description for PII (SSNs, Credit Cards) and detects prompt injection attempts.
-   - **Routing:** 
-     - If clean: Proceeds to `route_by_amount`.
-     - If suspicious: Sets `security_flag = True` and routes directly to `human_approval`, bypassing the LLM.
-
-3. **`route_by_amount` (Node)**  
-   Implements the fast-path deterministic logic.
-   - **Action:** Evaluates the dollar amount against the configured `APPROVAL_THRESHOLD` (default: $100).
-   - **Routing:**
-     - Under threshold: Routes to `__end__` (auto-approved).
-     - Over/Equal to threshold: Routes to the `review_agent`.
-
-4. **`review_agent` (Node)**  
-   The intelligent review step powered by the `gemini-3.1-flash-lite` model.
-   - **Action:** Evaluates the scrubbed expense data against company policy for risk factors.
-   - **Routing:**
-     - If the LLM approves: Routes to `__end__`.
-     - If the LLM flags the expense: Routes to `human_approval`.
-
-5. **`human_approval` (Node)**  
-   The Human-In-The-Loop (HITL) step.
-   - **Action:** Utilizes ADK's `RequestInput` to pause graph execution and await explicit human action via the Playground UI.
-   - **Routing:** Once input is received (approve/reject), the graph proceeds to `__end__`.
-
-## Workflow Diagram
+The application uses the Google ADK 2.0 graph Workflow API. The `App` registers a
+privacy plugin; the webhook, evaluation harness, and Agent Runtime wrapper all
+use that app so the plugin runs before session persistence and at model calls.
 
 ```mermaid
 flowchart TD
-    Start((Start)) --> Security[security_checkpoint]
-    Security -- "Suspicious (Injection detected)" --> HITL[human_approval]
-    Security -- "Clean" --> RouteAmount[route_by_amount]
-    
-    RouteAmount -- "< $100" --> End((End: Auto-Approved))
-    RouteAmount -- ">= $100" --> LLM[review_agent]
-    
-    LLM -- "Approved" --> End((End: LLM Approved))
-    LLM -- "Flagged" --> HITL
-    
-    HITL -.-> |User Input| End((End: Manual Decision))
+    Input[JSON or base64 expense] --> Privacy[App privacy plugin]
+    Privacy --> Parse[parse_expense_email]
+    Parse -- Invalid --> Invalid[reject_invalid]
+    Parse -- Valid --> Security[security_checkpoint]
+    Security -- Suspicious at any amount --> Human[request_approval]
+    Security -- Clean --> Amount[route_by_amount]
+    Amount -- Under $100 --> Auto[auto_approve]
+    Amount -- $100 or more --> LLM[review_agent]
+    LLM --> Human
+    Human -- Exact manager decision --> Decision[process_decision]
 ```
 
-## Infrastructure & Configuration
-- **Model Config**: Managed in `config.py`. Threshold values and model variants are decoupled from the graph definition.
-- **Observability**: Inherits ADK's built-in telemetry, allowing graph executions, transitions, and LLM traces to be viewed in the ADK CLI playground.
+The shared ADK context state holds `expense_data`, `redacted_categories`, and
+`security_flag`. Security flags reset on each expense. The threshold and existing
+model (`gemini-3.1-flash-lite`) remain in `expense_agent/config.py`.
+
+The model assesses risk and can emit a structured finance alert. Its
+recommendation is advisory: all expenses at or above the threshold continue to
+human review. `RequestInput` pauses the graph; a matching `adk_request_input`
+function response resumes it. Free-text decisions must be exactly `approve` or
+`reject` after trimming and case normalization.
+
+The FastAPI `/pubsub` endpoint validates the Pub/Sub envelope, creates an
+in-memory session per message, and runs the app asynchronously. Its HTTP `ok`
+means workflow execution reached its current stopping point; high-value expenses
+may still be waiting for human review. It is a prototype ingestion endpoint, not
+a production approval UI or payment service. See `SECURITY.md` for boundaries
+and deployment requirements.

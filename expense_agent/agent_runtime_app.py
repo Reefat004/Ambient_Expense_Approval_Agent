@@ -24,6 +24,7 @@ from vertexai.agent_engines.templates.adk import AdkApp
 from expense_agent.agent import app as adk_app
 from expense_agent.app_utils.telemetry import setup_telemetry
 from expense_agent.app_utils.typing import Feedback
+from expense_agent.security import redact
 
 # Load environment variables from .env file at runtime
 load_dotenv()
@@ -44,7 +45,7 @@ class AgentEngineApp(AdkApp):
     def register_feedback(self, feedback: dict[str, Any]) -> None:
         """Collect and log feedback."""
         feedback_obj = Feedback.model_validate(feedback)
-        self.logger.log_struct(feedback_obj.model_dump(), severity="INFO")
+        self.logger.log_struct(redact(feedback_obj.model_dump()), severity="INFO")
 
     def register_operations(self) -> dict[str, list[str]]:
         """Registers the operations of the Agent."""

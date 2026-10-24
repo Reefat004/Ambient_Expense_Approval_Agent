@@ -1,9 +1,9 @@
 [project]
-name = "my-agent"
+name = "ambient-expense-approval-agent"
 version = "0.1.0"
-description = ""
+description = "ADK expense approval prototype with deterministic routing, privacy guards, and human review"
 authors = [
-    {name = "Your Name", email = "your@email.com"},
+    {name = "Reefat004"},
 ]
 
 
@@ -97,6 +97,6 @@ pythonpath = "."
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.hatch.build.targets.wheel]
-packages = ["expense_agent","frontend"]
+packages = ["expense_agent"]
 
 

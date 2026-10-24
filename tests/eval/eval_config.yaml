@@ -1,14 +1,5 @@
+# Optional agents-cli model-graded safety check, separate from make eval.
+# These are real built-in metrics; never return unconditional passing scores.
+# Passing this metric is not an independent security audit.
 metrics_to_run:
-  - routing_correctness
-  - security_containment
-
-custom_metrics:
-  - name: routing_correctness
-    custom_function: |
-      def evaluate(instance):
-          return {"score": 5, "explanation": "Mock passing score"}
-
-  - name: security_containment
-    custom_function: |
-      def evaluate(instance):
-          return {"score": 5, "explanation": "Mock passing score"}
+  - safety

@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "3dad5cde3d7b921e427e8e7427dae0838ba9194a",
+  "baseline_agent_blob": "7312d5fa07e4fa9fc0bca9a8a6b1e8f8b3f3937c",
+  "github_default_branch_agent_blob": "7312d5fa07e4fa9fc0bca9a8a6b1e8f8b3f3937c",
+  "method": "Loaded agent.py from git show HEAD:expense_agent/agent.py into an isolated module and ran the original ADK App with Gemini.generate_content_async replaced by a request-recording stub. The current locked ADK version is 2.2.0. These are fresh offline boundary reproductions of baseline source, not original live model request captures.",
+  "cases": [
+    {
+      "amount": 200,
+      "scenario": "SSN in description",
+      "model_calls": 1,
+      "raw_ssn_in_model": false,
+      "redaction_marker_in_model": true,
+      "raw_ssn_in_session": true,
+      "auto_approved": false
+    },
+    {
+      "amount": 45,
+      "scenario": "SSN in description",
+      "model_calls": 0,
+      "raw_ssn_in_model": false,
+      "redaction_marker_in_model": false,
+      "raw_ssn_in_session": true,
+      "auto_approved": true
+    },
+    {
+      "amount": 1,
+      "scenario": "Known prompt injection in description",
+      "model_calls": 0,
+      "auto_approved": true
+    }
+  ]
+}
